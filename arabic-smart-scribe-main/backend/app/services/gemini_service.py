@@ -6,7 +6,83 @@ import random
 import uuid
 from ..core.config import settings
 
+from app.db.models import UserBehavior # Assuming UserBehavior is in this path
+from collections import Counter
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 class GeminiService:
+
+    async def _get_user_preferences(self, db: AsyncSession, user_id: str) -> dict:
+        """
+        Retrieves and analyzes recent user behaviors to infer simple text style preferences.
+
+        This method queries the UserBehavior table for actions related to text editing
+        by the specified user. It then applies heuristics to the 'action_data'
+        (expected to be JSON with a 'notes' field) to determine preferences for
+        tone (e.g., 'formal', 'informal') and length (e.g., 'short', 'long').
+
+        Args:
+        db: The active SQLAlchemy AsyncSession.
+        user_id: The ID of the user whose preferences are to be fetched.
+        If None or empty, default preferences are returned.
+
+        Returns:
+        A dictionary containing inferred preferences, e.g.,
+        {"tone": "informal", "length": "short"}. Defaults to
+        {"tone": "neutral", "length": "medium"} if no specific preferences
+        can be inferred or in case of errors.
+        """
+        preferences = {"tone": "neutral", "length": "medium"} # Default preferences
+        if not user_id: # No user, no preferences
+            return preferences
+
+        try:
+            # Fetch last 3 relevant user behaviors
+            stmt = (
+                select(UserBehavior)
+                .where(UserBehavior.user_id == user_id)
+                .where(UserBehavior.action_type.in_(['ai_correction', 'manual_edit']))
+                .order_by(UserBehavior.timestamp.desc())
+                .limit(3)
+            )
+            result = await db.execute(stmt)
+            behaviors = result.scalars().all()
+
+            tone_cues = []
+            length_cues = []
+
+            for behavior in behaviors:
+                if behavior.action_data:
+                    try:
+                        data = json.loads(behavior.action_data)
+                        notes = data.get('notes', '').lower()
+                        if 'formal' in notes:
+                            tone_cues.append('formal')
+                        elif 'informal' in notes or 'casual' in notes:
+                            tone_cues.append('informal')
+
+                        if 'concise' in notes or 'shorter' in notes:
+                            length_cues.append('short')
+                        elif 'detailed' in notes or 'longer' in notes:
+                            length_cues.append('long')
+                    except json.JSONDecodeError:
+                        pass
+
+            if tone_cues:
+                preferences['tone'] = Counter(tone_cues).most_common(1)[0][0]
+            if length_cues:
+                preferences['length'] = Counter(length_cues).most_common(1)[0][0]
+
+            # In a real app, use self.logger.info(...)
+            print(f"DEBUG: Inferred preferences for user {user_id}: {preferences}", file=sys.stderr)
+
+
+        except Exception as e:
+            # In a real app, use self.logger.error(...)
+            print(f"DEBUG: Error fetching or analyzing user preferences for {user_id}: {e}", file=sys.stderr)
+
+        return preferences
+
     def __init__(self):
         if settings.gemini_api_key:
             genai.configure(api_key=settings.gemini_api_key)
