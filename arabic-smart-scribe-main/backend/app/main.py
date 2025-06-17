@@ -7,6 +7,7 @@ from .api.routers import editing, projects, shahid, tasks
 from .video_processing.router import router as video_processing_router
 from .core.config import settings
 from .core.exceptions import (
+from app.api.routers import screenplay
     VideoProcessingError, GeminiAPIError, AuthenticationError, ValidationError,
     video_processing_exception_handler, gemini_api_exception_handler,
     authentication_exception_handler, validation_exception_handler
@@ -39,6 +40,7 @@ app.include_router(projects.router)
 app.include_router(shahid.router)
 app.include_router(video_processing_router)
 app.include_router(tasks.router)
+app.include_router(screenplay.router, prefix="/api/screenplay", tags=["Screenplay Generation"])
 
 @app.get("/")
 async def root():

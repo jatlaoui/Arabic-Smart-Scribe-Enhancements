@@ -1,7 +1,9 @@
 
-from sqlalchemy import Column, String, DateTime, Float, Text, Integer
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.sql import func
 from .base import Base
+from sqlalchemy.orm import relationship
+import uuid
 
 class TextSession(Base):
     __tablename__ = "text_sessions"
@@ -57,6 +59,7 @@ class Project(Base):
     user_id = Column(String, index=True)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    series_outlines = relationship("SeriesOutline", back_populates="project", cascade="all, delete-orphan")
     
 class KnowledgeBase(Base):
     """قاعدة المعرفة للمشروع"""
@@ -228,3 +231,34 @@ class ProjectUpdated(Base):
     # audiobooks = relationship("AudiobookGeneration", backref="project")
     # treatments = relationship("MovieTreatment", backref="project")
     # maps = relationship("InteractiveMap", backref="project")
+
+class SeriesOutline(Base):
+    __tablename__ = "series_outlines"
+
+    id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    project_id = Column(String, ForeignKey("projects.id"), nullable=False, index=True)
+    series_title = Column(String, nullable=True)
+    total_episodes = Column(Integer, nullable=False)
+    target_episode_duration_minutes = Column(Integer, nullable=True)
+
+    project = relationship("Project", back_populates="series_outlines")
+    episodes = relationship("EpisodeOutline", back_populates="series_outline", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<SeriesOutline(id='{self.id}', title='{self.series_title}', project_id='{self.project_id}')>"
+
+class EpisodeOutline(Base):
+    __tablename__ = "episode_outlines"
+
+    id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    series_outline_id = Column(String, ForeignKey("series_outlines.id"), nullable=False, index=True)
+    episode_number = Column(Integer, nullable=False)
+    title = Column(String, nullable=True)
+    logline = Column(Text, nullable=True)
+    key_events_json = Column(Text, nullable=True)  # Stores JSON list of event descriptions
+    cliffhanger_description = Column(Text, nullable=True)
+
+    series_outline = relationship("SeriesOutline", back_populates="episodes")
+
+    def __repr__(self):
+        return f"<EpisodeOutline(id='{self.id}', title='{self.title}', episode_number={self.episode_number})>"

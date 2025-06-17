@@ -8,6 +8,8 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Lightbulb, Users, MapPin, Heart, BookOpen, Sparkles } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
+import SeriesPlanner from './SeriesPlanner';
+import SeriesOutlineViewer from './SeriesOutlineViewer';
 
 interface KnowledgeBase {
   id: string;
@@ -44,6 +46,9 @@ export const ProfessionalShahidEngine: React.FC = () => {
     length: 'medium'
   });
   const [generatedScene, setGeneratedScene] = useState<string>('');
+  const [constructionMode, setConstructionMode] = useState<'novel' | 'screenplay' | null>(null);
+  const [seriesPlan, setSeriesPlan] = useState<any | null>(null);
+  const [constructionMode, setConstructionMode] = useState<'novel' | 'screenplay' | null>(null);
 
   const handlePhaseOne = async () => {
     setIsProcessing(true);
@@ -294,7 +299,21 @@ export const ProfessionalShahidEngine: React.FC = () => {
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold">المرحلة الثالثة: البناء السردي الآلي</h3>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+      {!constructionMode && (
+        <div className="flex flex-col md:flex-row gap-4 my-6 justify-center">
+          <Button onClick={ () => setConstructionMode('novel') } variant="outline" className="flex-1 py-6 text-lg">
+            <span className="mr-2">📚</span> توليد رواية
+          </Button>
+          <Button onClick={ () => { setConstructionMode('screenplay'); console.log('Screenplay mode selected - SeriesPlanner should load here.'); alert('Screenplay mode selected! Next step: Series Planner.'); } } variant="outline" className="flex-1 py-6 text-lg">
+            <span className="mr-2">🎬</span> توليد سيناريو مسلسل
+          </Button>
+        </div>
+      )}
+
+      {constructionMode === 'novel' && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium mb-2">نوع المشهد</label>
@@ -382,6 +401,44 @@ export const ProfessionalShahidEngine: React.FC = () => {
                   </div>
                 )}
               </div>
+        </>
+      )}
+
+      {constructionMode === 'screenplay' && (
+      <>
+        {!seriesPlan ? (
+
+        <div className="p-6 border rounded-md bg-gray-50">
+          <h4 className="text-xl font-semibold mb-4 text-center">🎬 وضع تخطيط المسلسل</h4>
+          <p className="text-center text-gray-700">
+            سيتم هنا عرض مخطط المسلسل (SeriesPlanner.tsx) لتحديد عدد الحلقات ومدتها.
+          </p>
+
+            <SeriesPlanner
+              projectId={knowledgeBase?.id || "temp-project-id"}
+              onSeriesPlanSubmitted={(planData) => {
+                console.log("Series Plan Submitted:", planData);
+                setSeriesPlan(planData);
+                alert("مخطط المسلسل جاهز للعرض!");
+              }}
+              onCancel={() => setConstructionMode(null
+        ) : (
+          <SeriesOutlineViewer
+            outlineData={seriesPlan}
+            onGoBackToPlanner={() => {
+              setSeriesPlan(null);
+            }}
+          />
+        )}
+      </>
+    )}
+            />
+          <Button onClick={() => setConstructionMode(null)} variant="link" className="mt-4">
+            العودة لاختيار المسار
+          </Button>
+        </div>
+      )}
+
             </TabsContent>
           </Tabs>
         </CardContent>
