@@ -1,11 +1,16 @@
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime
 import uuid
 
 from ...schemas.editing import (
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.api.dependencies import get_db, get_current_active_user
+from app.db.models import User
+from ..db.models import User
+from ..dependencies import get_current_active_user
     EditingRequest, 
     EditingResponse, 
     EditingTool, 
@@ -25,19 +30,13 @@ async def get_editing_tools():
     return {"tools": tools}
 
 @router.post("/edit-text", response_model=EditingResponse)
-async def edit_text(
-    request: EditingRequest,
-    db: Session = Depends(get_db)
+async def edit_text(request: EditingRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_active_user))
 ):
     """Edit text using AI with advanced capabilities"""
     start_time = datetime.now()
     
     try:
-        result = await gemini_service.edit_text(
-            request.text, 
-            request.tool_type,
-            request.target_length
-        )
+        result = await gemini_service.edit_text(db=db, user_id=current_user.id, text=request.text, tool_type=request.tool_type, target_length=request.target_length)
         
         processing_time = (datetime.now() - start_time).total_seconds()
         

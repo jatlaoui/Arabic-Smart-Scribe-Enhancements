@@ -74,12 +74,12 @@ class GeminiService:
                 preferences['length'] = Counter(length_cues).most_common(1)[0][0]
 
             # In a real app, use self.logger.info(...)
-            print(f"DEBUG: Inferred preferences for user {user_id}: {preferences}", file=sys.stderr)
+            logger.info(f"Inferred preferences for user {user_id}: {preferences}")
 
 
         except Exception as e:
             # In a real app, use self.logger.error(...)
-            print(f"DEBUG: Error fetching or analyzing user preferences for {user_id}: {e}", file=sys.stderr)
+            logger.error(f"Error fetching or analyzing user preferences for {user_id}: {e}", exc_info=True)
 
         return preferences
 
@@ -89,77 +89,134 @@ class GeminiService:
         else:
             print("Warning: GEMINI_API_KEY not configured")
 
-    async def edit_text(self, text: str, tool_type: str, target_length: Optional[int] = None) -> Dict[str, Any]:
-        """Advanced text editing using Gemini AI"""
-        
-        prompts = {
-            "expand": f"""قم بتوسيع النص التالي مع الحفاظ على الأسلوب والمعنى الأصلي. 
-            {"اجعل النص بطول " + str(target_length) + "% من النص الأصلي تقريباً." if target_length else ""}
-            أضف تفاصيل مفيدة وثراء في التعبير:
-
-            النص: {text}
-
-            النص المحسن:""",
+    async def edit_text(
+            self,
+            db: AsyncSession, # <-- Added
+            user_id: str,     # <-- Added
+            text: str,
+            tool_type: str,
+            target_length: Optional[int] = None
+        ) -> Dict[str, Any]:
+            """Advanced text editing using Gemini AI, personalized for the user.
             
-            "summarize": f"""قم بتلخيص النص التالي مع الحفاظ على النقاط الأساسية والمعنى.
-            {"اجعل النص بطول " + str(target_length) + "% من النص الأصلي تقريباً." if target_length else ""}
+            Uses user preferences for tone and length, if available, to tailor the
+            editing style.
             
-            النص: {text}
+            Args:
+                db: The active SQLAlchemy AsyncSession for database access.
+                user_id: The ID of the user requesting the edit, used for personalization.
+                text: The original text to be edited.
+                tool_type: The type of editing tool to apply (e.g., "improve", "summarize").
+                target_length: Optional target length for operations like summarize/expand.
 
-            الملخص:""",
-            
-            "improve": f"""قم بتحسين النص التالي من ناحية الأسلوب والوضوح والبنية اللغوية:
+            Returns:
+                A dictionary containing the edited text and other relevant information.
+                Example: {"edited_text": "...", "tool_type": "...", "applied_preferences": {...}}
 
-            النص: {text}
+            Raises:
+                ValueError: If an invalid tool_type is provided.
+                Exception: If there's an error during processing with the Gemini API.
+            """
+            # Ensure logger is available
+            logger = getattr(self, 'logger', None)
+            if not logger:
+                # Fallback for environments where logger might not be initialized (e.g. some tests)
+                # In a production setup, self.logger should always be available.
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning("Logger not found on GeminiService instance, using fallback.")
+            
+            logger.info(f"Editing text for user {user_id} with tool {tool_type}. Original length: {len(text)}")
 
-            النص المحسن:""",
-            
-            "rephrase": f"""أعد صياغة النص التالي بأسلوب جديد ومتطور مع الحفاظ على المعنى:
+            user_prefs = await self._get_user_preferences(db, user_id)
+            tone_pref = user_prefs.get("tone", "neutral")
+            length_pref = user_prefs.get("length", "medium")
+            logger.info(f"User preferences: tone='{tone_pref}', length='{length_pref}'")
 
-            النص: {text}
+            style_instructions = f"Apply a style that tends to be '{tone_pref}'."
+            if length_pref == 'short' and tool_type not in ['expand']: # Avoid conflicting instructions
+                style_instructions += " Make the text concise and to the point."
+            elif length_pref == 'long' and tool_type not in ['summarize', 'simplify']: # Avoid conflicting instructions
+                style_instructions += " Add more details and elaboration."
 
-            النص المُعاد صياغته:""",
-            
-            "simplify": f"""قم بتبسيط النص التالي ليصبح أكثر وضوحاً وسهولة في الفهم:
+            logger.debug(f"Constructed style instructions: {style_instructions}")
 
-            النص: {text}
+            prompts = {
+                "expand": f"""قم بتوسيع النص التالي مع الحفاظ على الأسلوب والمعنى الأصلي. {style_instructions}
+                {"اجعل النص بطول " + str(target_length) + "% من النص الأصلي تقريباً." if target_length else ""}
+                أضف تفاصيل مفيدة وثراء في التعبير:
 
-            النص المبسط:""",
-            
-            "enhance": f"""قم بتعزيز وإثراء النص التالي بإضافة عمق في المعنى وجمال في التعبير:
+                النص: {{text}}
 
-            النص: {text}
+                النص المحسن:""",
+                "summarize": f"""قم بتلخيص النص التالي مع الحفاظ على النقاط الأساسية والمعنى. {style_instructions}
+                {"اجعل النص بطول " + str(target_length) + "% من النص الأصلي تقريباً." if target_length else ""}
 
-            النص المُعزز:"""
-        }
-        
-        try:
-            if not settings.gemini_api_key:
-                raise Exception("Gemini API Key is not configured.")
-            
-            model = genai.GenerativeModel('gemini-1.5-flash-latest')
-            prompt = prompts.get(tool_type, prompts["improve"])
-            
-            response = await model.generate_content_async(prompt)
-            
-            edited_text = response.text.strip()
-            
-            suggestions = [
-                "تم تحسين بنية الجمل",
-                "تم إثراء المفردات", 
-                "تم تحسين التدفق والانسيابية",
-                "تم تعزيز الوضوح والدقة"
-            ]
-            
-            return {
-                "edited_text": edited_text,
-                "confidence_score": random.uniform(0.8, 0.95),
-                "suggestions": suggestions[:3]
+                النص: {{text}}
+
+                الملخص:""",
+                "improve": f"""قم بتحسين النص التالي من ناحية الأسلوب والوضوح والبنية اللغوية. {style_instructions}
+
+                النص: {{text}}
+
+                النص المحسن:""",
+                "rephrase": f"""أعد صياغة النص التالي بأسلوب جديد ومتطور مع الحفاظ على المعنى. {style_instructions}
+
+                النص: {{text}}
+
+                النص المُعاد صياغته:""",
+                "simplify": f"""قم بتبسيط النص التالي ليصبح أكثر وضوحاً وسهولة في الفهم. {style_instructions}
+
+                النص: {{text}}
+
+                النص المبسط:""",
+                "enhance": f"""قم بتعزيز وإثراء النص التالي بإضافة عمق في المعنى وجمال في التعبير. {style_instructions}
+
+                النص: {{text}}
+
+                النص المُعزز:"""
             }
             
-        except Exception as e:
-            raise Exception(f"خطأ في معالجة النص مع Gemini: {str(e)}")
+            prompt_template = prompts.get(tool_type)
+            if not prompt_template:
+                logger.error(f"Invalid tool_type: {tool_type}")
+                raise ValueError(f"Invalid tool_type provided: {tool_type}")
 
+            final_prompt = prompt_template.format(text=text)
+            logger.debug(f"Final prompt for Gemini (first 300 chars): {final_prompt[:300]}...")
+
+            try:
+                # Assuming genai is imported globally or as self.genai
+                # and settings are accessible e.g. from self.settings or global settings
+                # This part replicates the original structure for calling Gemini
+                import google.generativeai as genai # Ensure genai is available
+                from ..core.config import settings # Assuming settings path
+
+                if not settings.gemini_api_key:
+                    logger.error("Gemini API Key is not configured.")
+                    raise Exception("Gemini API Key is not configured.")
+
+                model = genai.GenerativeModel('gemini-1.5-flash-latest') # Or model from settings
+                response = await model.generate_content_async(final_prompt)
+                edited_text = response.text.strip()
+
+                suggestions_for_fe = [
+                    "Personalized style applied based on user history.",
+                    f"Tone preference: {tone_pref}",
+                    f"Length preference: {length_pref}"
+                ]
+
+                return {
+                    "edited_text": edited_text,
+                    "confidence_score": 0.85, # Placeholder, original was random.uniform(0.8, 0.95)
+                    "suggestions": suggestions_for_fe,
+                    "tool_type": tool_type,
+                    "applied_preferences": user_prefs
+                }
+
+            except Exception as e:
+                logger.error(f"Error processing text with Gemini for tool {tool_type}: {e}", exc_info=True)
+                raise Exception(f"Error processing text with Gemini: {str(e)}")
     async def analyze_text_comprehensive(self, text: str) -> Dict[str, Any]:
         """Comprehensive text analysis using Gemini"""
         try:
