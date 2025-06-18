@@ -1,46 +1,50 @@
-
 import { BaseApiClient } from './base-client';
 import {
-  TranscriptCleaningRequest,
-  KeyPointsExtractionRequest,
-  BookOutlineRequest,
-  ChapterWritingRequest,
-  VideoToBookRequest
-} from '../types/api-types';
+  TranscriptCleaningRequestData,
+  TranscriptCleaningResponseData,
+  KeyPointsExtractionRequestData,
+  KeyPointsExtractionResponseData,
+  BookOutlineRequestData,
+  BookOutlineResponseData,
+  ChapterWritingRequestData,
+  ChapterWritingResponseData,
+  VideoToBookRequestData,
+  VideoToBookResponseData,
+} from '../types/api-types'; // Assuming all are in api-types.ts with "Data" suffix for request/response
 
 export class VideoProcessingApiClient extends BaseApiClient {
-  async cleanTranscript(request: TranscriptCleaningRequest): Promise<any> {
-    return this.request('/api/video-processing/clean-transcript', {
+  async cleanTranscript(data: TranscriptCleaningRequestData): Promise<TranscriptCleaningResponseData> {
+    return this.request<TranscriptCleaningResponseData>('/api/video-processing/clean-transcript', {
       method: 'POST',
-      body: JSON.stringify(request),
+      body: JSON.stringify(data),
     });
   }
 
-  async extractKeyPoints(request: KeyPointsExtractionRequest): Promise<any> {
-    return this.request('/api/video-processing/extract-key-points', {
+  async extractKeyPoints(data: KeyPointsExtractionRequestData): Promise<KeyPointsExtractionResponseData> {
+    return this.request<KeyPointsExtractionResponseData>('/api/video-processing/extract-key-points', {
       method: 'POST',
-      body: JSON.stringify(request),
+      body: JSON.stringify(data),
     });
   }
 
-  async generateBookOutline(request: BookOutlineRequest): Promise<any> {
-    return this.request('/api/video-processing/generate-book-outline', {
+  async generateBookOutline(data: BookOutlineRequestData): Promise<BookOutlineResponseData> {
+    return this.request<BookOutlineResponseData>('/api/video-processing/generate-book-outline', {
       method: 'POST',
-      body: JSON.stringify(request),
+      body: JSON.stringify(data),
     });
   }
 
-  async writeChapter(request: ChapterWritingRequest): Promise<any> {
-    return this.request('/api/video-processing/write-chapter', {
+  async writeChapter(data: ChapterWritingRequestData): Promise<ChapterWritingResponseData> {
+    return this.request<ChapterWritingResponseData>('/api/video-processing/write-chapter', {
       method: 'POST',
-      body: JSON.stringify(request),
+      body: JSON.stringify(data),
     });
   }
 
-  async processVideoToBook(request: VideoToBookRequest): Promise<any> {
-    return this.request('/api/video-processing/process-video-to-book', {
+  async processVideoToBook(data: VideoToBookRequestData): Promise<VideoToBookResponseData> {
+    return this.request<VideoToBookResponseData>('/api/video-processing/process-video-to-book', {
       method: 'POST',
-      body: JSON.stringify(request),
+      body: JSON.stringify(data),
     });
   }
 }
