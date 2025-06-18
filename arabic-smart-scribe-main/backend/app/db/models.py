@@ -1,5 +1,5 @@
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.sql import func
 from .base import Base
 from sqlalchemy.orm import relationship
@@ -87,6 +87,10 @@ class Character(Base):
     importance_score = Column(Float, default=0.0)
     created_at = Column(DateTime, default=func.now())
 
+    aliases = Column(JSON, nullable=True)  # Stores list of strings
+    color = Column(String(7), nullable=True)  # Hex color, e.g., '#RRGGBB'
+    link_url = Column(String, nullable=True)
+    is_external_link = Column(Boolean, default=False, nullable=False)
 class Event(Base):
     """أحداث القصة"""
     __tablename__ = "events"
@@ -112,6 +116,10 @@ class Place(Base):
     atmosphere = Column(String)
     created_at = Column(DateTime, default=func.now())
 
+    aliases = Column(JSON, nullable=True)  # Stores list of strings
+    color = Column(String(7), nullable=True)  # Hex color
+    link_url = Column(String, nullable=True)
+    is_external_link = Column(Boolean, default=False, nullable=False)
 class Claim(Base):
     """ادعاءات ومعلومات مهمة"""
     __tablename__ = "claims"
