@@ -1,4 +1,4 @@
-from app.tasks.celery_app import celery_app
+from app.celery_worker import celery_app # Updated import
 from app.services.advanced_context_engine import AdvancedContextEngine
 # Import DatabaseService - assuming it might be moved or accessed differently by a task
 # For now, direct DB operations or a simplified service access might be needed if circular deps arise
@@ -15,17 +15,9 @@ logger = logging.getLogger(__name__)
 def architectural_analysis_task(content: str, project_id: str) -> Dict[str, Any]:
     logger.info(f"Starting architectural analysis for project_id: {project_id}")
     db: Session = SessionLocal()
-    engine = AdvancedContextEngine() # Requires async handling if its methods are async
-
-    analysis_data = {}
-    try:
-        # Note: AdvancedContextEngine.analyze_text is async, Celery tasks are typically sync.
-        # This requires running the async method in an event loop.
-        # For simplicity in this step, let's assume analyze_text can be called appropriately
-        # or a sync wrapper is available. If not, this part needs adjustment.
     engine = AdvancedContextEngine()
+    # Removed duplicated engine instantiation and analysis_data = {} and try:
 
-    analysis_data = {}
     try:
         # Call the synchronous analysis method from AdvancedContextEngine
         parsed_llm_data = engine.analyze_text_for_db_population(content)

@@ -1,8 +1,8 @@
 
 from fastapi import APIRouter, HTTPException
 from celery.result import AsyncResult
-from ...tasks.celery_app import celery_app
-from ...tasks.video_tasks import process_video_to_book_task
+from ...celery_worker import celery_app # Updated import path
+from ...tasks.video_tasks import process_video_to_book_task # This path should still be valid
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])

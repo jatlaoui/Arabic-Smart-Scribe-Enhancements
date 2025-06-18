@@ -6,16 +6,19 @@ from typing import Dict, Any, Optional
 import asyncio
 from app.services.gemini_service import GeminiService
 from app.services.youtube_service import YouTubeService
+from app.celery_worker import celery_app # Import the shared Celery app
+from datetime import datetime # Add missing import for TaskStateManager
 
-# Celery app configuration
-celery_app = Celery(
-    "arabic_smart_scribe",
-    broker=settings.REDIS_URL,
-    backend=settings.REDIS_URL,
-    include=['app.tasks.video_tasks', 'app.tasks.shahid_tasks']
-)
+# Celery app configuration (REMOVED local instance)
+# celery_app = Celery(
+#     "arabic_smart_scribe",
+#     broker=settings.REDIS_URL,
+#     backend=settings.REDIS_URL,
+#     include=['app.tasks.video_tasks', 'app.tasks.shahid_tasks'] # shahid_tasks doesn't exist
+# )
 
-# Redis client for task state management
+# Redis client for task state management - kept as it's used by TaskStateManager
+# This might be okay if it's for custom progress state separate from Celery backend.
 redis_client = redis.from_url(settings.REDIS_URL)
 
 class TaskStateManager:
