@@ -3,7 +3,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from .api.routers import editing, projects, shahid, tasks, agents, tools, collaboration, arbitrator, workflows, users, pdf, analytics # Added analytics
+from .api.routers import editing, projects, shahid, tasks, agents, tools, collaboration, arbitrator, workflows, users, pdf, analytics, utils # Added utils
 from .video_processing.router import router as video_processing_router
 from .core.config import settings
 from .core.exceptions import (
@@ -46,15 +46,17 @@ app.include_router(arbitrator.router)
 app.include_router(workflows.router)
 app.include_router(users.router)
 app.include_router(pdf.router)
-app.include_router(analytics.router) # Added analytics router
+app.include_router(analytics.router)
+app.include_router(utils.router) # Added utils router
 
 @app.get("/")
 async def root():
     return {"message": "Smart Writing Platform API", "version": "1.0.0"}
 
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy", "version": "1.0.0"}
+# Removed root /health endpoint, as it's now in utils.router under /api/utils/health
+# @app.get("/health")
+# async def health_check():
+#     return {"status": "healthy", "version": "1.0.0"}
 
 if __name__ == "__main__":
     import uvicorn

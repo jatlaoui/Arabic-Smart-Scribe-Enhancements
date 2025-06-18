@@ -103,6 +103,49 @@ async def update_project(
     db.refresh(project_model)
     return model_to_schema(project_model)
 
+from fastapi.responses import StreamingResponse
+import io
+
+@router.get("/{project_id}/export_txt")
+async def export_project_as_txt(
+    project_id: str,
+    db: Session = Depends(get_db)
+):
+    """Export project content as a TXT file."""
+    project_model = db.query(ProjectModel).filter(ProjectModel.id == project_id).first()
+    if project_model is None:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    # Assemble content
+    # For now, primarily using project.content.
+    # Future enhancements could involve assembling from chapters stored elsewhere, e.g., in KnowledgeBase or separate Chapter models.
+
+    title = project_model.title if project_model.title else "Untitled_Project"
+    description = project_model.description if project_model.description else "No description."
+    main_content = project_model.content if project_model.content else "No main content available for this project."
+
+    full_text_parts = [
+        f"Title: {title}",
+        f"Description: {description}",
+        "\n" + "="*50 + "\n",
+        "Content:",
+        main_content
+    ]
+    full_text = "\n\n".join(full_text_parts)
+
+    file_like_object = io.BytesIO(full_text.encode('utf-8'))
+
+    # Clean the title for the filename
+    safe_filename_title = "".join(c if c.isalnum() or c in " _-" else "_" for c in title)
+    if not safe_filename_title: # handle empty or fully non-alphanumeric titles
+        safe_filename_title = "project_export"
+
+    response_headers = {
+        "Content-Disposition": f"attachment; filename=\"{safe_filename_title}.txt\""
+    }
+
+    return StreamingResponse(file_like_object, media_type="text/plain", headers=response_headers)
+
 @router.delete("/{project_id}", status_code=http_status.HTTP_204_NO_CONTENT)
 async def delete_project(
     project_id: str,
@@ -148,7 +191,7 @@ async def update_project_metadata(
 
     project_model.metadata = metadata_update.metadata
     project_model.updated_at = datetime.now()
-    
+
     db.commit()
     db.refresh(project_model)
     return model_to_schema(project_model)
