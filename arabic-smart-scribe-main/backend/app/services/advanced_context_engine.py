@@ -1,10 +1,17 @@
-from typing import Dict, List, Any, Optional, Tuple
+import logging
+
+from app.schemas.common_types import TextChunkWithContext
+from markdown_it import MarkdownIt
+from typing import List, Dict, Any, Optional
+
 from pydantic import BaseModel
 import json
 import uuid
 from datetime import datetime
 from app.services.gemini_service import GeminiService
 from app.services.web_search_service import WebSearchService
+
+logger = logging.getLogger(__name__)
 
 class Entity(BaseModel):
     id: str
@@ -268,3 +275,50 @@ class AdvancedContextEngine:
             emotional_transitions=[],
             climax_point=None
         )
+
+    def process_markdown_to_chunks(
+            self,
+            markdown_content: str,
+            source_id: str,
+        ) -> List[TextChunkWithContext]:
+            """
+            Parses Markdown content, performs hierarchical chunking based on headers,
+            and associates contextual header information with each chunk.
+            """
+            logger.info(f"Processing Markdown for source_id: {source_id}, length: {len(markdown_content)}")
+            chunks: List[TextChunkWithContext] = []
+            md = MarkdownIt()
+            tokens = md.parse(markdown_content)
+            current_headers: List[str] = []
+            current_paragraph_texts: List[str] = []
+
+            def create_text_chunk(text_content: str, headers: List[str]):
+                if not text_content.strip(): return
+                chunks.append(
+                    TextChunkWithContext(
+                        text_content=text_content.strip(),
+                        source_id=source_id,
+                        context_metadata={"source_type": "pdf_markdown_paragraph", "headers": headers.copy()}
+                    )
+                )
+                current_paragraph_texts.clear()
+
+            active_heading_text = ""
+            for i, token in enumerate(tokens):
+                if token.type == "heading_open":
+                    create_text_chunk(" ".join(current_paragraph_texts), current_headers)
+                    header_level = int(token.tag[1:])
+                    while len(current_headers) >= header_level: current_headers.pop()
+                    active_heading_text = ""
+                elif token.type == "text" and i > 0 and tokens[i-1].type == "heading_open":
+                    active_heading_text = token.content.strip()
+                elif token.type == "heading_close":
+                    if active_heading_text: current_headers.append(active_heading_text); active_heading_text = ""
+                elif token.type == "paragraph_open":
+                    create_text_chunk(" ".join(current_paragraph_texts), current_headers)
+                elif token.type == "text": current_paragraph_texts.append(token.content)
+                elif token.type == "paragraph_close":
+                    create_text_chunk(" ".join(current_paragraph_texts), current_headers)
+            create_text_chunk(" ".join(current_paragraph_texts), current_headers)
+            logger.info(f"Processed Markdown for source_id: {source_id} into {len(chunks)} chunks.")
+            return chunks

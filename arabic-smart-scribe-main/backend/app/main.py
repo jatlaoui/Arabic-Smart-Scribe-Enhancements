@@ -8,6 +8,7 @@ from .video_processing.router import router as video_processing_router
 from .core.config import settings
 from .core.exceptions import (
 from app.api.routers import screenplay
+from app.api.routers import web_novel
     VideoProcessingError, GeminiAPIError, AuthenticationError, ValidationError,
     video_processing_exception_handler, gemini_api_exception_handler,
     authentication_exception_handler, validation_exception_handler
@@ -294,3 +295,5 @@ async def get_multimedia_dashboard(project_id: str, db: Session = Depends(get_db
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"خطأ في لوحة التحكم: {str(e)}")
+
+app.include_router(web_novel.router, prefix="/api", tags=["Interactive Web Novel"])
