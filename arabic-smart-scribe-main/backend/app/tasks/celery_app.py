@@ -7,7 +7,7 @@ celery_app = Celery(
     "smart_writing_platform",
     broker=os.getenv("REDIS_URL", "redis://localhost:6379/0"),
     backend=os.getenv("REDIS_URL", "redis://localhost:6379/0"),
-    include=["app.tasks.video_tasks"]
+    include=["app.tasks.video_tasks", "app.tasks.narrative_tasks"] # Added narrative_tasks
 )
 
 # إعداد الكونفيغ
@@ -23,4 +23,5 @@ celery_app.conf.update(
 # إعداد التسمية للمهام
 celery_app.conf.task_routes = {
     "app.tasks.video_tasks.*": {"queue": "video_processing"},
+    "app.tasks.narrative_tasks.*": {"queue": "narrative_processing"}, # Added route for narrative tasks
 }

@@ -141,7 +141,84 @@ class AdvancedContextEngine:
             conflicts=conflicts,
             narrative_potential=narrative_potential
         )
-    
+
+    def analyze_text_for_db_population(self, text: str) -> Dict[str, Any]:
+        """
+        Analyzes text and returns a structured dictionary for populating the database.
+        This is a synchronous method suitable for Celery tasks.
+        """
+        import asyncio
+        import logging # Added logging
+        logger = logging.getLogger(__name__) # Added logger
+
+        prompt = f"""
+        قم بتحليل النص الروائي التالي واستخرج المعلومات المحددة.
+        أرجع الإخراج بتنسيق JSON صالح حصريًا. يجب أن يتبع JSON هذا الهيكل الدقيق:
+        {{
+          "title": "عنوان الرواية المستخرج",
+          "author": "اسم المؤلف المستخرج (إذا وجد، وإلا اتركه فارغًا)",
+          "themes": ["موضوع رئيسي 1", "موضوع رئيسي 2", "..."],
+          "characters": [
+            {{"name": "اسم الشخصية", "description": "وصف موجز للشخصية ودورها وأهم سماتها", "role": "بطل/خصم/شخصية رئيسية/شخصية ثانوية"}}
+          ],
+          "events": [
+            {{"title": "عنوان الحدث الرئيسي", "description": "وصف موجز للحدث وتسلسله الزمني التقريبي أو موقعه في الرواية", "timeline_position": "مثال: الفصل الأول، بداية الرواية، منتصف الأحداث"}}
+          ],
+          "places": [
+            {{"name": "اسم المكان", "description": "وصف موجز للمكان وأهميته في الرواية", "significance": "مثال: موقع رئيسي للأحداث، مكان رمزي، مكان عابر"}}
+          ]
+        }}
+
+        النص الروائي:
+        ---
+        {text[:25000]}
+        ---
+
+        تأكد من أن الإخراج هو JSON فقط، بدون أي نصوص أو توضيحات إضافية قبله أو بعده.
+        إذا لم تتمكن من استخراج معلومة معينة، استخدم قيمة فارغة مناسبة (مثل "" للسلاسل النصية أو [] للقوائم).
+        """
+
+        llm_response_str = ""
+        try:
+            # Running async method from sync context
+            llm_response_str = asyncio.run(self.gemini_service.generate_content(prompt))
+
+            # Clean the response if it's wrapped in markdown ```json ... ```
+            if llm_response_str.strip().startswith("```json"):
+                llm_response_str = llm_response_str.strip()[7:-3].strip()
+            elif llm_response_str.strip().startswith("```"):
+                 llm_response_str = llm_response_str.strip()[3:-3].strip()
+
+
+            parsed_data = json.loads(llm_response_str)
+            # Basic validation of structure
+            required_keys = ["title", "author", "themes", "characters", "events", "places"]
+            for key in required_keys:
+                if key not in parsed_data:
+                    # Log error and return a dict indicating failure or default structure
+                    logger.error(f"LLM response missing key: {key}. Response: {llm_response_str[:500]}")
+                    # Fallback to a default structure to avoid breaking the calling task
+                    return {
+                        "title": "", "author": "", "themes": [],
+                        "characters": [], "events": [], "places": [],
+                        "error": f"LLM response missing key: {key}"
+                    }
+            return parsed_data
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse LLM JSON response: {e}. Response: {llm_response_str[:1000]}") # Log more of the response
+            return {
+                "title": "", "author": "", "themes": [],
+                "characters": [], "events": [], "places": [],
+                "error": "Failed to parse LLM response", "raw_response": llm_response_str
+            }
+        except Exception as e: # Catch other potential errors during LLM call or processing
+            logger.error(f"An unexpected error occurred in analyze_text_for_db_population: {e}. Response: {llm_response_str[:500]}", exc_info=True)
+            return {
+                "title": "", "author": "", "themes": [],
+                "characters": [], "events": [], "places": [],
+                "error": f"Unexpected error: {str(e)}", "raw_response": llm_response_str
+            }
+
     async def _extract_advanced_entities(self, text: str) -> List[Entity]:
         """استخراج متقدم للكيانات مع التحليل العميق"""
         

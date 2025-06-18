@@ -10,10 +10,12 @@ from ...schemas.editing import (
     EditingResponse, 
     EditingTool, 
     TextAnalysisRequest,
-    SmartSuggestionsRequest
+    SmartSuggestionsRequest,
+    ComprehensiveTextAnalysisResponse # Added
 )
-from ...services.gemini_service import gemini_service
+# from ...services.gemini_service import gemini_service # Commented out for this endpoint
 from ...services.editing_service import editing_service
+from ...services.text_analysis_service import TextAnalysisService # Added
 from ..dependencies import get_db
 
 router = APIRouter(prefix="/api", tags=["editing"])
@@ -62,15 +64,29 @@ async def edit_text(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/analyze-text-comprehensive")
-async def analyze_text_comprehensive(request: TextAnalysisRequest):
-    """Comprehensive text analysis"""
+@router.post("/analyze-text-comprehensive", response_model=ComprehensiveTextAnalysisResponse)
+async def analyze_text_comprehensive_endpoint( # Renamed function to avoid conflict if old one is kept temporarily
+    request: TextAnalysisRequest,
+    # db: Session = Depends(get_db) # Not strictly needed for this specific service call
+):
+    """Comprehensive text analysis using Python-based logic"""
     try:
-        analysis = await gemini_service.analyze_text_comprehensive(request.text)
-        return analysis
+        analysis_service = TextAnalysisService()
+        # The user_profile and analysis_type parameters from the original Flask function signature
+        # are not directly passed here. user_profile is not used by the ported basic Python logic.
+        # request.analysis_type can be passed if the service evolves to use it.
+        analysis_result = analysis_service.analyze_text_comprehensively(
+            text=request.text
+            # user_profile can be added if auth and profiles are integrated
+            # analysis_type=request.analysis_type
+        )
+        return analysis_result
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Log the exception for debugging
+        # import traceback
+        # traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error during text analysis: {str(e)}")
 
 @router.post("/generate-smart-suggestions")
 async def generate_smart_suggestions(request: SmartSuggestionsRequest):

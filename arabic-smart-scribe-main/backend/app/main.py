@@ -3,7 +3,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from .api.routers import editing, projects, shahid, tasks
+from .api.routers import editing, projects, shahid, tasks, agents, tools, collaboration, arbitrator, workflows, users, pdf, analytics # Added analytics
 from .video_processing.router import router as video_processing_router
 from .core.config import settings
 from .core.exceptions import (
@@ -39,6 +39,14 @@ app.include_router(projects.router)
 app.include_router(shahid.router)
 app.include_router(video_processing_router)
 app.include_router(tasks.router)
+app.include_router(agents.router)
+app.include_router(tools.router)
+app.include_router(collaboration.router)
+app.include_router(arbitrator.router)
+app.include_router(workflows.router)
+app.include_router(users.router)
+app.include_router(pdf.router)
+app.include_router(analytics.router) # Added analytics router
 
 @app.get("/")
 async def root():

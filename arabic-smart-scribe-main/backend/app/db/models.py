@@ -1,7 +1,11 @@
 
-from sqlalchemy import Column, String, DateTime, Float, Text, Integer
+from sqlalchemy import Column, String, DateTime, Float, Text, Integer, JSON, ForeignKey, ForeignKeyConstraint, Boolean
 from sqlalchemy.sql import func
 from .base import Base
+from typing import Optional, Dict, Any, List # Added List for Mapped typing
+import uuid # For default ID generation in AgentMessageModel
+from datetime import datetime # Ensure datetime is available for default values
+
 
 class TextSession(Base):
     __tablename__ = "text_sessions"
@@ -52,11 +56,17 @@ class Project(Base):
     
     id = Column(String, primary_key=True, index=True)
     title = Column(String, nullable=False)
-    description = Column(Text)
-    content = Column(Text)
-    user_id = Column(String, index=True)
+    description = Column(Text, nullable=True)
+    content = Column(Text, nullable=True) # Assuming content can also be optional like in schema
+    user_id = Column(String, index=True, nullable=True) # Made nullable
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    # Restoring Project specific fields that were previously mixed up
+    stage = Column(String, default="initial", nullable=True)
+    metadata = Column(JSON, nullable=True, default=lambda: {})
+    status = Column(String, default="draft", nullable=False)
+    tags = Column(JSON, nullable=True, default=lambda: [])
+    # word_count is a calculated field, will not be a DB column.
     
 class KnowledgeBase(Base):
     """قاعدة المعرفة للمشروع"""
@@ -68,7 +78,9 @@ class KnowledgeBase(Base):
     events = Column(Text)  # JSON للأحداث
     places = Column(Text)  # JSON للأماكن
     claims = Column(Text)  # JSON للادعاءات
+    themes = Column(JSON, nullable=True, default=lambda: []) # Added themes
     created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now()) # Added updated_at for consistency
 
 class Character(Base):
     """شخصيات القصة"""
@@ -164,7 +176,113 @@ class UnifiedKnowledgeBase(Base):
     location_mapping = Column(Text)  # JSON لربط الأماكن عبر المصادر
     cross_references = Column(Text)  # JSON للمراجع المتقاطعة
     created_at = Column(DateTime, default=func.now())
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now()) # Added updated_at for consistency
+
+# User Profile and Analytics Models
+class UserProfileModel(Base):
+    __tablename__ = "user_profiles"
+
+    user_id = Column(String, primary_key=True, index=True)
+    profile_name = Column(String, nullable=True)
+    style_preferences_json = Column(JSON, nullable=True, default=lambda: {})
+    writing_habits_json = Column(JSON, nullable=True, default=lambda: {})
+    jattlaoui_adaptation_level = Column(Float, nullable=True, default=0.5)
+    preferred_vocabulary_complexity = Column(Float, nullable=True, default=0.5)
+    preferred_sentence_length = Column(Float, nullable=True, default=0.5)
+    preferred_cultural_depth = Column(Float, nullable=True, default=0.5)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class ContentRatingModel(Base):
+    __tablename__ = "content_ratings"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, ForeignKey("user_profiles.user_id"), index=True, nullable=False)
+    content_type = Column(String, nullable=True)
+    content_preview = Column(Text, nullable=True)
+    rating = Column(Integer, nullable=False)
+    specific_feedback_json = Column(JSON, nullable=True, default=lambda: {})
+    project_id = Column(String, ForeignKey("projects.id"), index=True, nullable=True)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        ForeignKeyConstraint(['user_id'], ['user_profiles.user_id'], name='fk_rating_user'),
+        ForeignKeyConstraint(['project_id'], ['projects.id'], name='fk_rating_project'),
+    )
+
+class WritingSessionModel(Base):
+    __tablename__ = "writing_sessions"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, ForeignKey("user_profiles.user_id"), index=True, nullable=False)
+    project_id = Column(String, ForeignKey("projects.id"), index=True, nullable=True)
+    session_start_time = Column(DateTime, default=datetime.utcnow)
+    session_end_time = Column(DateTime, nullable=True)
+    words_written = Column(Integer, default=0)
+    edits_made = Column(Integer, default=0) # Number of edits/actions during the session
+    quality_score_snapshot = Column(Float, nullable=True) # Overall quality score at end of session
+    stage_number_snapshot = Column(Integer, nullable=True) # Project stage at end of session
+    active_duration_seconds = Column(Integer, default=0) # Calculated active time
+
+    __table_args__ = (
+        ForeignKeyConstraint(['user_id'], ['user_profiles.user_id'], name='fk_writingsession_user'),
+        ForeignKeyConstraint(['project_id'], ['projects.id'], name='fk_writingsession_project'),
+    )
+
+class StyleAnalysisSnapshotModel(Base):
+    __tablename__ = "style_analysis_snapshots"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, ForeignKey("user_profiles.user_id"), index=True, nullable=False)
+    project_id = Column(String, ForeignKey("projects.id"), index=True, nullable=True)
+    session_id = Column(String, ForeignKey("writing_sessions.id"), index=True, nullable=True) # Link to a specific writing session
+    analysis_date = Column(DateTime, default=datetime.utcnow)
+    text_snapshot_preview = Column(Text, nullable=True) # Preview of the text analyzed
+
+    metaphor_density = Column(Float, nullable=True)
+    vocabulary_complexity = Column(Float, nullable=True)
+    formality_score = Column(Float, nullable=True)
+    creativity_score = Column(Float, nullable=True)
+    coherence_score = Column(Float, nullable=True)
+    avg_sentence_length = Column(Float, nullable=True)
+    cultural_references_count = Column(Integer, nullable=True)
+
+    __table_args__ = (
+        ForeignKeyConstraint(['user_id'], ['user_profiles.user_id'], name='fk_styleanalysis_user'),
+        ForeignKeyConstraint(['project_id'], ['projects.id'], name='fk_styleanalysis_project'),
+        ForeignKeyConstraint(['session_id'], ['writing_sessions.id'], name='fk_styleanalysis_session'),
+    )
+
+# Agent Studio Models
+class AgentCollaborationSessionModel(Base):
+    __tablename__ = "agent_collaboration_sessions"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = Column(String, nullable=False)
+    purpose = Column(Text, nullable=True)
+    agent_ids = Column(JSON, nullable=False) # Stores list of agent IDs
+    status = Column(String, default="active", nullable=False) # e.g., active, brainstorming, completed, archived
+    current_activity = Column(String, nullable=True)
+    activity_data = Column(JSON, nullable=True) # For storing data related to current_activity, e.g., brainstorm topic
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class WorkflowDefinitionModel(Base):
+    __tablename__ = "workflow_definitions"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = Column(String, index=True, nullable=False)
+    description = Column(Text, nullable=True)
+    workflow_json = Column(JSON, nullable=False) # To store nodes, edges, positions, etc.
+    user_identifier = Column(String, index=True, nullable=True)
+    is_template = Column(Boolean, default=False)
+    is_public = Column(Boolean, default=False)
+    tags_json = Column(JSON, nullable=True) # Storing List[str] as JSON
+    complexity_level = Column(String, nullable=True)
+    estimated_duration_minutes = Column(Integer, nullable=True)
+    usage_count = Column(Integer, default=0, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class AudiobookGeneration(Base):
     """توليد الكتب الصوتية"""
@@ -228,3 +346,48 @@ class ProjectUpdated(Base):
     # audiobooks = relationship("AudiobookGeneration", backref="project")
     # treatments = relationship("MovieTreatment", backref="project")
     # maps = relationship("InteractiveMap", backref="project")
+
+
+# Agent Studio Models
+class AgentModel(Base):
+    __tablename__ = "agents"
+
+    id = Column(String, primary_key=True, index=True) # Using String for UUIDs
+    name = Column(String, index=True, nullable=False)
+    type = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    config = Column(JSON, nullable=True, default=lambda: {})
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+class AgentMessageModel(Base):
+    __tablename__ = "agent_messages"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    from_agent_id = Column(String, ForeignKey("agents.id"), index=True, nullable=False)
+    to_agent_id = Column(String, ForeignKey("agents.id"), index=True, nullable=False)
+    session_id = Column(String, index=True, nullable=True)
+    content = Column(Text, nullable=False)
+    timestamp = Column(DateTime, default=datetime.utcnow) # Changed to datetime.utcnow for consistency
+    metadata = Column(JSON, nullable=True, default=lambda: {})
+
+    # Optional: Define relationships to AgentModel if needed for ORM queries
+    # from_agent = relationship("AgentModel", foreign_keys=[from_agent_id])
+    # to_agent = relationship("AgentModel", foreign_keys=[to_agent_id])
+
+    __table_args__ = (
+        ForeignKeyConstraint(['from_agent_id'], ['agents.id'], name='fk_message_from_agent'),
+        ForeignKeyConstraint(['to_agent_id'], ['agents.id'], name='fk_message_to_agent'),
+    )
+
+class ToolModel(Base):
+    __tablename__ = "tools"
+
+    id = Column(String, primary_key=True, index=True) # Using String for UUIDs
+    name = Column(String, index=True, nullable=False)
+    category = Column(String, nullable=True)
+    description = Column(Text, nullable=True)
+    function_name = Column(String, nullable=False, unique=True) # Assuming function_name should be unique
+    config = Column(JSON, nullable=True, default=lambda: {})
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
